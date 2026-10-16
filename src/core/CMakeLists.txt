@@ -1,0 +1,165 @@
+cmake_minimum_required(VERSION 3.14)
+
+# Core engine library
+set(KRKR_CORE_SOURCES
+    base/tvp_types.cpp
+    base/tvp_types.h
+    base/tvp_config.h
+    base/StorageImpl.cpp
+    base/StorageImpl.h
+    base/EventImpl.cpp
+    base/EventImpl.h
+    base/SysInitImpl.cpp
+    base/SysInitImpl.h
+    base/SystemImpl.cpp
+    base/SystemImpl.h
+    base/PluginImpl.cpp
+    base/PluginImpl.h
+    base/ScriptMgnImpl.cpp
+    base/ScriptMgnImpl.h
+    base/MsgImpl.cpp
+    base/MsgImpl.h
+    base/NativeEventQueue.cpp
+    base/NativeEventQueue.h
+    base/tvp_text.cpp
+    base/tvp_text.h
+    base/tvp_file.cpp
+    base/tvp_file.h
+    base/XP3Archive.cpp
+    base/XP3Archive.h
+    base/BinaryStream.cpp
+    base/BinaryStream.h
+    base/CharacterSet.cpp
+    base/CharacterSet.h
+    visual/LayerImpl.cpp
+    visual/LayerImpl.h
+    visual/BitmapImpl.cpp
+    visual/BitmapImpl.h
+    visual/WindowImpl.cpp
+    visual/WindowImpl.h
+    visual/TVPScreen.cpp
+    visual/TVPScreen.h
+    visual/GraphicsLoaderImpl.cpp
+    visual/GraphicsLoaderImpl.h
+    visual/BasicDrawDevice.cpp
+    visual/BasicDrawDevice.h
+    sound/WaveImpl.cpp
+    sound/WaveImpl.h
+    sound/WaveMixer.cpp
+    sound/WaveMixer.h
+    environ/Application.cpp
+    environ/Application.h
+    environ/SystemControl.cpp
+    environ/SystemControl.h
+    environ/DetectCPU.cpp
+    environ/DetectCPU.h
+    environ/ClipboardImpl.cpp
+    environ/ClipboardImpl.h
+    environ/Platform.cpp
+    environ/Platform.h
+)
+
+# TJS2 script engine sources
+set(KRKR_TJS2_SOURCES
+    base/tjs2/tjs2.cpp
+    base/tjs2/tjs2.h
+    base/tjs2/tjsArray.cpp
+    base/tjs2/tjsArray.h
+    base/tjs2/tjsByteCode.cpp
+    base/tjs2/tjsByteCode.h
+    base/tjs2/tjsCodeZone.cpp
+    base/tjs2/tjsCodeZone.h
+    base/tjs2/tjsCollect.cpp
+    base/tjs2/tjsCollect.h
+    base/tjs2/tjsDate.cpp
+    base/tjs2/tjsDate.h
+    base/tjs2/tjsDebug.cpp
+    base/tjs2/tjsDebug.h
+    base/tjs2/tjsDictionary.cpp
+    base/tjs2/tjsDictionary.h
+    base/tjs2/tjsError.cpp
+    base/tjs2/tjsError.h
+    base/tjs2/tjsErrorReports.cpp
+    base/tjs2/tjsErrorReports.h
+    base/tjs2/tjsException.cpp
+    base/tjs2/tjsException.h
+    base/tjs2/tjsGlobalStringMap.cpp
+    base/tjs2/tjsGlobalStringMap.h
+    base/tjs2/tjsHashSearch.cpp
+    base/tjs2/tjsHashSearch.h
+    base/tjs2/tjsInterCodeGen.cpp
+    base/tjs2/tjsInterCodeGen.h
+    base/tjs2/tjsInterfaceHolder.cpp
+    base/tjs2/tjsInterfaceHolder.h
+    base/tjs2/tjsLexer.cpp
+    base/tjs2/tjsLexer.h
+    base/tjs2/tjsNamespace.cpp
+    base/tjs2/tjsNamespace.h
+    base/tjs2/tjsObject.cpp
+    base/tjs2/tjsObject.h
+    base/tjs2/tjsOperateCode.cpp
+    base/tjs2/tjsOperateCode.h
+    base/tjs2/tjsParser.cpp
+    base/tjs2/tjsParser.h
+    base/tjs2/tjsScriptBlock.cpp
+    base/tjs2/tjsScriptBlock.h
+    base/tjs2/tjsScriptLexer.cpp
+    base/tjs2/tjsScriptLexer.h
+    base/tjs2/tjsString.cpp
+    base/tjs2/tjsString.h
+    base/tjs2/tjsUtils.cpp
+    base/tjs2/tjsUtils.h
+    base/tjs2/tjsVariant.cpp
+    base/tjs2/tjsVariant.h
+    base/tjs2/tjsVCL.cpp
+    base/tjs2/tjsVCL.h
+    base/tjs2/tjsDate.cpp
+    base/tjs2/tjsDate.h
+    base/tjs2/tjsMath.cpp
+    base/tjs2/tjsMath.h
+    base/tjs2/tjsRandomGenerator.cpp
+    base/tjs2/tjsRandomGenerator.h
+    base/tjs2/tjsRegex.cpp
+    base/tjs2/tjsRegex.h
+    base/tjs2/tjsGlobalStringMap.cpp
+    base/tjs2/tjsGlobalStringMap.h
+)
+
+# KAG parser
+set(KRKR_KAG_SOURCES
+    base/kag/KAGParser.cpp
+    base/kag/KAGParser.h
+    base/kag/KAGUtils.cpp
+    base/kag/KAGUtils.h
+)
+
+add_library(krkr_core STATIC
+    ${KRKR_CORE_SOURCES}
+    ${KRKR_TJS2_SOURCES}
+    ${KRKR_KAG_SOURCES}
+)
+
+target_include_directories(krkr_core PUBLIC
+    ${CMAKE_CURRENT_SOURCE_DIR}
+    ${CMAKE_CURRENT_SOURCE_DIR}/base
+    ${CMAKE_CURRENT_SOURCE_DIR}/base/tjs2
+    ${CMAKE_CURRENT_SOURCE_DIR}/base/kag
+    ${CMAKE_CURRENT_SOURCE_DIR}/visual
+    ${CMAKE_CURRENT_SOURCE_DIR}/sound
+    ${CMAKE_CURRENT_SOURCE_DIR}/environ
+)
+
+target_link_libraries(krkr_core PUBLIC
+    ${SDL2_LIBRARIES}
+    ${SDL2_IMAGE_LIBRARIES}
+    ${SDL2_MIXER_LIBRARIES}
+    ${SDL2_TTF_LIBRARIES}
+    ${FREETYPE_LIBRARIES}
+    ${PNG_LIBRARIES}
+    ${JPEG_LIBRARIES}
+    ${VORBIS_LIBRARIES}
+    ${OGG_LIBRARIES}
+    ${ZLIB_LIBRARIES}
+    Threads::Threads
+    dl
+)

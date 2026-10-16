@@ -1,0 +1,25 @@
+// startup.tjs - krkrv8a engine startup script
+// This script initializes the Kirikiri2 engine
+
+// Global variables
+global krkr_version = "1.0.0";
+global krkr_platform = "linux";
+
+// Initialize the engine
+function initializeEngine() {
+    // Set up the main window
+    // Window dimensions will be set by the application
+    Debug.message("krkrv8a " + krkr_version + " starting...");
+    Debug.message("Platform: " + krkr_platform);
+}
+
+// Main entry point
+function main() {
+    initializeEngine();
+    
+    // The engine will continue running after this
+    // Game scripts take over from here
+}
+
+// Call main
+main();

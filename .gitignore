@@ -1,0 +1,32 @@
+# Build files
+build/
+*.o
+*.a
+*.so
+*.exe
+*.dll
+
+# IDE files
+.vscode/
+.idea/
+*.swp
+*~
+.DS_Store
+
+# CMake
+CMakeCache.txt
+CMakeFiles/
+cmake_install.cmake
+Makefile
+install_manifest.txt
+compile_commands.json
+
+# Generated files
+generated/
+
+# Reference repos (not part of this project)
+reference/
+third_party/
+
+# OS files
+Thumbs.db
