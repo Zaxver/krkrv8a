@@ -8,6 +8,7 @@ add_library(krkr_launcher STATIC ${KRKR_LAUNCHER_SOURCES})
 
 target_include_directories(krkr_launcher PUBLIC
     ${CMAKE_CURRENT_SOURCE_DIR}
+    ${CMAKE_BINARY_DIR}/generated
 )
 
 target_link_libraries(krkr_launcher PUBLIC
