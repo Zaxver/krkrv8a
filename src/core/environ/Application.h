@@ -47,6 +47,7 @@ public:
 private:
     SDL_Window* m_window = nullptr;
     SDL_GLContext m_glContext = nullptr;
+    SDL_Renderer* m_renderer = nullptr;
     int m_width = 1280;
     int m_height = 720;
     bool m_initialized = false;

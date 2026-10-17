@@ -3,6 +3,7 @@
 #include <zlib.h>
 #include <cstring>
 #include <fstream>
+#include <cstdint>
 
 XP3Archive::XP3Archive() {}
 
@@ -84,8 +85,8 @@ bool XP3Archive::Open(const std::string& filepath) {
                     
                     if (pos + name_len * 2 > header_data.size()) break;
                     entry.name.resize(name_len);
-                    for (tjs_uint32 i = 0; i < name_len; i++) {
-                        tjs_uint16 ch;
+                    for (uint32_t i = 0; i < name_len; i++) {
+                        uint16_t ch;
                         memcpy(&ch, &header_data[pos + i * 2], 2);
                         entry.name[i] = (wchar_t)ch;
                     }

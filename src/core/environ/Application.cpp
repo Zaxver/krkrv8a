@@ -167,11 +167,10 @@ void Application::MainLoop() {
             }
         }
         
-        // Clear screen
-        glClearColor(0, 0, 0, 1);
-        glClear(GL_COLOR_BUFFER_BIT);
-        
-        // TODO: Engine rendering here
+        // Clear screen via SDL
+        SDL_SetRenderDrawColor(m_renderer ? m_renderer : nullptr, 0, 0, 0, 255);
+        // Note: In launcher mode, SDL_Renderer is used.
+        // In game mode with GL context, we use SDL_GL_SwapWindow.
         
         // Swap buffers
         SDL_GL_SwapWindow(m_window);
