@@ -11,6 +11,9 @@
 #include <iostream>
 #include <filesystem>
 #include <cstring>
+#include <unistd.h>
+#include <sys/wait.h>
+#include <errno.h>
 
 namespace fs = std::filesystem;
 
@@ -150,22 +153,46 @@ int main(int argc, char* argv[]) {
             gamePath = launcher.GetSelectedGamePath();
             TVP_LOG_INFO("Selected game: %s", gamePath.c_str());
             
-            // Launch game in a new process so launcher stays alive
-            // Build the command with environment
-            std::string cmd = std::string("SDL_AUDIODRIVER=dummy LD_LIBRARY_PATH=") + 
-                              "/data/data/com.termux/files/usr/lib" +
-                              " DISPLAY=" + (getenv("DISPLAY") ? getenv("DISPLAY") : ":0") +
-                              " " + std::string(argv[0]) + " \"" + gamePath + "\" &";
-            TVP_LOG_INFO("Launching: %s", cmd.c_str());
-            system(cmd.c_str());
-            launcher.ClearSelection();
+            // Fork + exec to start game as completely new process
+            // This avoids SDL state conflicts between launcher and game
+            pid_t pid = fork();
+            if (pid == 0) {
+                // Child process - exec self with game path
+                // Close launcher's SDL resources first
+                launcher.Shutdown();
+                SDL_DestroyRenderer(renderer);
+                SDL_DestroyWindow(window);
+                SDL_Quit();
+                
+                // Set environment for the new process
+                setenv("SDL_AUDIODRIVER", "dummy", 1);
+                
+                // exec self with game path
+                execl(argv[0], argv[0], gamePath.c_str(), nullptr);
+                // If exec fails
+                TVP_LOG_ERROR("execl failed: %s", strerror(errno));
+                _exit(127);
+            } else if (pid > 0) {
+                // Parent - wait for child to finish
+                TVP_LOG_INFO("Game process started (PID=%d), waiting...", pid);
+                int status;
+                waitpid(pid, &status, 0);
+                TVP_LOG_INFO("Game process exited (status=%d)", status);
+                launcher.ClearSelection();
+                // Re-show launcher window
+                SDL_ShowWindow(window);
+                SDL_RaiseWindow(window);
+            } else {
+                TVP_LOG_ERROR("fork() failed");
+                launcher.ClearSelection();
+            }
         }
     } else {
         // === Direct Game Mode ===
         TVP_LOG_INFO("Starting game: %s", gamePath.c_str());
         
         Application app;
-        if (!app.Initialize(width, height, "krkrv8a")) {
+        if (!app.Initialize(width, height, "krkrv8a - Game")) {
             TVP_LOG_ERROR("Failed to initialize application");
             return 1;
         }

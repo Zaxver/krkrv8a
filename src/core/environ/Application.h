@@ -7,9 +7,11 @@
 #include "StorageImpl.h"
 #include "EventImpl.h"
 #include <SDL2/SDL.h>
+#include <SDL2/SDL_ttf.h>
 #include <memory>
 #include <string>
 #include <functional>
+#include <vector>
 
 // Main application class
 // Manages SDL initialization, window, game lifecycle
@@ -30,7 +32,7 @@ public:
     
     // Get the window
     SDL_Window* GetWindow() { return m_window; }
-    SDL_GLContext GetGLContext() { return m_glContext; }
+    SDL_Renderer* GetRenderer() { return m_renderer; }
     
     // Get subsystems
     StorageImpl& GetStorage() { return m_storage; }
@@ -46,20 +48,23 @@ public:
     
 private:
     SDL_Window* m_window = nullptr;
-    SDL_GLContext m_glContext = nullptr;
     SDL_Renderer* m_renderer = nullptr;
+    TTF_Font* m_font = nullptr;
     int m_width = 1280;
     int m_height = 720;
     bool m_initialized = false;
     bool m_running = false;
+    int m_logScroll = 0;
     
     StorageImpl m_storage;
     EventImpl m_event;
     
     bool InitSDL();
     bool InitWindow(int width, int height, const char* title);
-    bool InitGL();
+    void LoadFont();
     void MainLoop();
+    void RenderLogScreen();
+    void RenderText(const std::string& text, int x, int y, SDL_Color color, int fontSize = 14);
 };
 
 #endif // TVP_APPLICATION_H
