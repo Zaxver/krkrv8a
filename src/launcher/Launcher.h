@@ -23,7 +23,8 @@ struct GameEntry {
 enum class LauncherMode {
     Library,
     Settings,
-    About
+    About,
+    Log
 };
 
     // File browser - removed, using zenity now
@@ -72,6 +73,9 @@ private:
     void RenderTopBar();
     void RenderGameGrid();
     void RenderAddGameDialog();
+    
+    void RenderFileBrowser();
+    void RenderScreenLog();
     
     void LoadFont();
     void DetectDPI();

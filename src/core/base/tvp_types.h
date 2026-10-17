@@ -110,6 +110,8 @@ enum class TVPLogLevel {
 };
 
 void TVPLog(TVPLogLevel level, const char* fmt, ...);
+void TVPSetLogFile(const std::string& path);
+std::vector<std::string> TVPGetScreenLogLines();
 #define TVP_LOG_TRACE(fmt, ...) TVPLog(TVPLogLevel::Trace, fmt, ##__VA_ARGS__)
 #define TVP_LOG_DEBUG(fmt, ...) TVPLog(TVPLogLevel::Debug, fmt, ##__VA_ARGS__)
 #define TVP_LOG_INFO(fmt, ...)  TVPLog(TVPLogLevel::Info, fmt, ##__VA_ARGS__)

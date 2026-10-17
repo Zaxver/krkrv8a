@@ -509,6 +509,7 @@ void Launcher::RenderTopBar() {
     SDL_Rect tabLib = {tabX, tabY, tabW, tabH};
     SDL_Rect tabSet = {tabX + tabW + S(5), tabY, tabW, tabH};
     SDL_Rect tabAbout = {tabX + (tabW + S(5)) * 2, tabY, tabW, tabH};
+    SDL_Rect tabLog = {tabX + (tabW + S(5)) * 3, tabY, tabW, tabH};
     
     if (Button("Library", tabLib, m_mode == LauncherMode::Library ? col_accent : col_card, col_cardHover))
         m_mode = LauncherMode::Library;
@@ -516,6 +517,8 @@ void Launcher::RenderTopBar() {
         m_mode = LauncherMode::Settings;
     if (Button("About", tabAbout, m_mode == LauncherMode::About ? col_accent : col_card, col_cardHover))
         m_mode = LauncherMode::About;
+    if (Button("Log", tabLog, m_mode == LauncherMode::Log ? col_accent : col_card, col_cardHover))
+        m_mode = LauncherMode::Log;
     
     // GPU status indicator (top right)
     bool hw = IsHardwareAccelerated();
@@ -873,6 +876,48 @@ void Launcher::RenderSettings() {
     }
 }
 
+void Launcher::RenderFileBrowser() {
+    // Not used - zenity handles file browsing
+}
+
+void Launcher::RenderScreenLog() {
+    int x = S(20);
+    int y = S(80) - m_settingsScroll;
+    int lineH = S(20);
+    int maxLines = (m_windowHeight - S(120)) / lineH;
+    
+    RenderText("Log Output", x, y, col_text, 24);
+    y += S(40);
+    
+    auto lines = TVPGetScreenLogLines();
+    
+    // Show last N lines
+    int start = 0;
+    if ((int)lines.size() > maxLines) {
+        start = (int)lines.size() - maxLines;
+    }
+    
+    // Clip area
+    SDL_Rect clipRect = {S(10), y, m_windowWidth - S(20), m_windowHeight - S(y) - S(10)};
+    SDL_RenderSetClipRect(m_renderer, &clipRect);
+    
+    for (int i = start; i < (int)lines.size(); i++) {
+        const std::string& line = lines[i];
+        SDL_Color color = col_text;
+        
+        if (line.find("[ERROR]") != std::string::npos) color = {220, 80, 80, 255};
+        else if (line.find("[WARN]") != std::string::npos) color = {220, 160, 40, 255};
+        else if (line.find("[INFO]") != std::string::npos) color = {140, 180, 220, 255};
+        else if (line.find("[DEBUG]") != std::string::npos) color = {120, 120, 140, 255};
+        
+        RenderText(line, x, y, color, 12);
+        y += lineH;
+        if (y > m_windowHeight - S(10)) break;
+    }
+    
+    SDL_RenderSetClipRect(m_renderer, nullptr);
+}
+
 void Launcher::RenderAbout() {
     int x = S(20);
     int y = S(80);
@@ -912,6 +957,7 @@ void Launcher::Render() {
         case LauncherMode::Library:  RenderLibrary(); break;
         case LauncherMode::Settings:  RenderSettings(); break;
         case LauncherMode::About:    RenderAbout(); break;
+        case LauncherMode::Log:      RenderScreenLog(); break;
     }
     
     if (m_showAddDialog) RenderAddGameDialog();
@@ -945,7 +991,7 @@ void Launcher::HandleEvent(const SDL_Event& event) {
             }
             break;
         case SDL_MOUSEWHEEL:
-            if (m_mode == LauncherMode::Settings) {
+            if (m_mode == LauncherMode::Settings || m_mode == LauncherMode::Log) {
                 m_settingsScroll -= event.wheel.y * S(30);
                 if (m_settingsScroll < 0) m_settingsScroll = 0;
             } else {

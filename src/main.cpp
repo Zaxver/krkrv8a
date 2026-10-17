@@ -79,6 +79,16 @@ int main(int argc, char* argv[]) {
     TVP_LOG_INFO("krkrv8a %s starting...", KRKR_VERSION_STRING);
     TVP_LOG_INFO("Platform: %s (%s)", Platform::GetPlatformName(), Platform::GetArchName());
     
+    // Set up log file
+    const char* home = getenv("HOME");
+    if (home) {
+        std::string logPath = std::string(home) + "/.local/share/krkrv8a/krkrv8a.log";
+        // Ensure directory exists
+        fs::create_directories(std::string(home) + "/.local/share/krkrv8a");
+        TVPSetLogFile(logPath);
+        TVP_LOG_INFO("Log file: %s", logPath.c_str());
+    }
+    
     // Initialize SDL
     if (SDL_Init(SDL_INIT_VIDEO | SDL_INIT_AUDIO | SDL_INIT_TIMER) != 0) {
         TVP_LOG_ERROR("SDL_Init failed: %s", SDL_GetError());
@@ -116,9 +126,9 @@ int main(int argc, char* argv[]) {
         }
         
         SDL_Renderer* renderer = SDL_CreateRenderer(window, -1, 
-            SDL_RENDERER_ACCELERATED | SDL_RENDERER_PRESENTVSYNC);
+            SDL_RENDERER_SOFTWARE);
         if (!renderer) {
-            renderer = SDL_CreateRenderer(window, -1, SDL_RENDERER_SOFTWARE);
+            renderer = SDL_CreateRenderer(window, -1, 0);
         }
         
         if (!renderer) {
@@ -140,33 +150,15 @@ int main(int argc, char* argv[]) {
             gamePath = launcher.GetSelectedGamePath();
             TVP_LOG_INFO("Selected game: %s", gamePath.c_str());
             
-            // Shutdown launcher
-            launcher.Shutdown();
-            SDL_DestroyRenderer(renderer);
-            SDL_DestroyWindow(window);
-            
-            // Restart in game mode
-            // Recreate window for game
-            window = SDL_CreateWindow(
-                "krkrv8a",
-                SDL_WINDOWPOS_CENTERED, SDL_WINDOWPOS_CENTERED,
-                width, height,
-                SDL_WINDOW_OPENGL | SDL_WINDOW_SHOWN | SDL_WINDOW_RESIZABLE |
-                (fullscreen ? SDL_WINDOW_FULLSCREEN_DESKTOP : 0)
-            );
-            
-            if (!window) {
-                TVP_LOG_ERROR("Failed to create game window: %s", SDL_GetError());
-                return 1;
-            }
-            
-            Application app;
-            if (!app.Initialize(width, height, "krkrv8a")) {
-                TVP_LOG_ERROR("Failed to initialize application");
-                return 1;
-            }
-            
-            app.Run(gamePath);
+            // Launch game in a new process so launcher stays alive
+            // Build the command with environment
+            std::string cmd = std::string("SDL_AUDIODRIVER=dummy LD_LIBRARY_PATH=") + 
+                              "/data/data/com.termux/files/usr/lib" +
+                              " DISPLAY=" + (getenv("DISPLAY") ? getenv("DISPLAY") : ":0") +
+                              " " + std::string(argv[0]) + " \"" + gamePath + "\" &";
+            TVP_LOG_INFO("Launching: %s", cmd.c_str());
+            system(cmd.c_str());
+            launcher.ClearSelection();
         }
     } else {
         // === Direct Game Mode ===
