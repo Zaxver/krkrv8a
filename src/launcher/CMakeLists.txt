@@ -2,7 +2,6 @@ cmake_minimum_required(VERSION 3.14)
 
 set(KRKR_LAUNCHER_SOURCES
     Launcher.cpp
-    Launcher.h
 )
 
 add_library(krkr_launcher STATIC ${KRKR_LAUNCHER_SOURCES})
