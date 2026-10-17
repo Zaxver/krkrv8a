@@ -44,7 +44,8 @@ struct Settings {
     int audioVolume = 64;
     std::string fontPath;
     int uiScale = 100; // percentage, 100 = 1x
-    bool autoDetectDPI = true;
+    bool autoDetectDPI = false; // default OFF - user controls scale
+    int manualDPI = 160; // user-specified DPI (160 = 1x)
 };
 
 class Launcher {

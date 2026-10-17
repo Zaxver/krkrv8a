@@ -33,7 +33,7 @@ TTF_Font* Launcher::GetFont(int size) const {
 void Launcher::DetectDPI() {
     m_androidDPI = 0;
     
-    // Try reading Android DPI via getprop (through /system/bin/getprop)
+    // Read Android DPI for display purposes
     FILE* fp = popen("getprop ro.sf.lcd_density 2>/dev/null", "r");
     if (fp) {
         char buf[32];
@@ -43,7 +43,6 @@ void Launcher::DetectDPI() {
         pclose(fp);
     }
     
-    // Fallback: try SDL display DPI
     if (m_androidDPI == 0) {
         float ddpi = 0;
         int idx = SDL_GetWindowDisplayIndex(m_window);
@@ -51,22 +50,20 @@ void Launcher::DetectDPI() {
             m_androidDPI = (int)ddpi;
         }
     }
-    
-    // Fallback: default 160 (1x)
     if (m_androidDPI == 0) m_androidDPI = 160;
     
-    // Calculate scale factor: 160 DPI = 1.0x
+    // Scale: if auto, use detected. Otherwise use manual DPI.
     if (m_settings.autoDetectDPI) {
         m_dpiScale = m_androidDPI / 160.0f;
-        // Clamp to reasonable range
-        if (m_dpiScale < 1.0f) m_dpiScale = 1.0f;
-        if (m_dpiScale > 4.0f) m_dpiScale = 4.0f;
     } else {
-        m_dpiScale = m_settings.uiScale / 100.0f;
-        if (m_dpiScale < 0.5f) m_dpiScale = 0.5f;
+        m_dpiScale = m_settings.manualDPI / 160.0f;
     }
     
-    TVP_LOG_INFO("Launcher: DPI=%d, scale=%.2f", m_androidDPI, m_dpiScale);
+    if (m_dpiScale < 0.5f) m_dpiScale = 0.5f;
+    if (m_dpiScale > 4.0f) m_dpiScale = 4.0f;
+    
+    TVP_LOG_INFO("Launcher: DPI=%d, manual=%d, scale=%.2f, auto=%d",
+                 m_androidDPI, m_settings.manualDPI, m_dpiScale, m_settings.autoDetectDPI);
 }
 
 std::string Launcher::GetGPUInfo() const {
@@ -270,6 +267,7 @@ void Launcher::LoadSettings() {
         else if (key == "font_path") m_settings.fontPath = val;
         else if (key == "ui_scale") m_settings.uiScale = atoi(val.c_str());
         else if (key == "auto_dpi") m_settings.autoDetectDPI = (val == "1");
+        else if (key == "manual_dpi") m_settings.manualDPI = atoi(val.c_str());
     }
 }
 
@@ -286,6 +284,7 @@ void Launcher::SaveSettings() {
     f << "font_path=" << m_settings.fontPath << "\n";
     f << "ui_scale=" << m_settings.uiScale << "\n";
     f << "auto_dpi=" << (m_settings.autoDetectDPI ? "1" : "0") << "\n";
+    f << "manual_dpi=" << m_settings.manualDPI << "\n";
 }
 
 bool Launcher::Initialize(SDL_Window* window, SDL_Renderer* renderer) {
@@ -853,53 +852,68 @@ void Launcher::RenderSettings() {
     y += lineH;
     
     // DPI display
-    RenderText("Screen DPI:", x, y + S(5), col_text, 16);
+    RenderText("Screen DPI (detected):", x, y + S(5), col_text, 16);
     RenderText(std::to_string(m_androidDPI), x + labelW, y + S(5), col_textDim, 16);
     y += lineH;
     
-    // UI Scale
-    RenderText("UI Scale:", x, y + S(5), col_text, 16);
-    RenderText(std::to_string(m_settings.uiScale) + "%", x + labelW, y + S(5), col_textDim, 16);
-    // Slider
-    SDL_Rect sliderTrack = {x + labelW + S(70), y + S(8), S(200), S(12)};
-    DrawRect(sliderTrack, {50, 50, 60, 255});
-    int sliderPos = (m_settings.uiScale - 50) * S(200) / 250; // 50% to 300%
-    if (sliderPos < 0) sliderPos = 0;
-    if (sliderPos > S(200)) sliderPos = S(200);
-    SDL_Rect sliderFill = {sliderTrack.x, sliderTrack.y, sliderPos, S(12)};
-    DrawRect(sliderFill, col_accent);
-    // Handle
-    SDL_Rect handle = {sliderTrack.x + sliderPos - S(6), sliderTrack.y - S(4), S(12), S(20)};
-    DrawRect(handle, col_text);
-    
-    // Slider interaction
-    bool sliderHover = (m_mouseX >= sliderTrack.x && m_mouseX < sliderTrack.x + sliderTrack.w + S(20) &&
-                       m_mouseY >= sliderTrack.y - S(5) && m_mouseY < sliderTrack.y + sliderTrack.h + S(5));
-    if (sliderHover && m_mousePressed) {
-        m_editingItem = 1; // editing UI scale slider
-    }
-    if (m_editingItem == 1 && m_mousePressed) {
-        int rel = m_mouseX - sliderTrack.x;
-        if (rel < 0) rel = 0;
-        if (rel > S(200)) rel = S(200);
-        m_settings.uiScale = 50 + rel * 250 / S(200);
-        m_settings.autoDetectDPI = false;
-        m_dpiScale = m_settings.uiScale / 100.0f;
-        LoadFont(); // reload font at new size
-        SaveSettings();
-    }
-    y += lineH;
-    
     // Auto DPI toggle
-    RenderText("Auto DPI Detection:", x, y + S(5), col_text, 16);
+    RenderText("Auto DPI (use detected):", x, y + S(5), col_text, 16);
     SDL_Rect adBtn = {x + labelW, y, S(50), S(28)};
     if (Button(m_settings.autoDetectDPI ? "ON" : "OFF", adBtn,
         m_settings.autoDetectDPI ? (SDL_Color){60, 140, 60, 255} : col_card, col_cardHover)) {
         m_settings.autoDetectDPI = !m_settings.autoDetectDPI;
-        if (m_settings.autoDetectDPI) {
+        DetectDPI();
+        LoadFont();
+        SaveSettings();
+    }
+    y += lineH;
+    
+    // Manual DPI slider (only meaningful when auto is OFF)
+    RenderText("Manual DPI:", x, y + S(5), col_text, 16);
+    RenderText(std::to_string(m_settings.manualDPI) + "  (scale=" + 
+               std::to_string((int)(m_settings.manualDPI / 160.0f * 100)) + "%)",
+               x + labelW, y + S(5), col_textDim, 16);
+    // DPI slider: 80 to 800
+    SDL_Rect dpiTrack = {x + labelW + S(180), y + S(8), S(200), S(12)};
+    DrawRect(dpiTrack, {50, 50, 60, 255});
+    int dpiRange = 800 - 80;
+    int dpiPos = (m_settings.manualDPI - 80) * S(200) / dpiRange;
+    if (dpiPos < 0) dpiPos = 0;
+    if (dpiPos > S(200)) dpiPos = S(200);
+    SDL_Rect dpiFill = {dpiTrack.x, dpiTrack.y, dpiPos, S(12)};
+    DrawRect(dpiFill, col_accent);
+    SDL_Rect dpiHandle = {dpiTrack.x + dpiPos - S(6), dpiTrack.y - S(4), S(12), S(20)};
+    DrawRect(dpiHandle, col_text);
+    // Preset buttons
+    int presetY = y + S(8);
+    int presetX = dpiTrack.x + dpiTrack.w + S(10);
+    const char* presets[] = {"80", "120", "160", "240", "320", nullptr};
+    int presetVals[] = {80, 120, 160, 240, 320};
+    for (int i = 0; presets[i]; i++) {
+        SDL_Rect pBtn = {presetX + i * S(35), presetY, S(30), S(20)};
+        if (Button(presets[i], pBtn,
+            m_settings.manualDPI == presetVals[i] ? col_accent : col_card, col_cardHover)) {
+            m_settings.manualDPI = presetVals[i];
+            m_settings.autoDetectDPI = false;
             DetectDPI();
             LoadFont();
+            SaveSettings();
         }
+    }
+    // Slider interaction
+    bool dpiHover = (m_mouseX >= dpiTrack.x - S(5) && m_mouseX < dpiTrack.x + dpiTrack.w + S(5) &&
+                    m_mouseY >= dpiTrack.y - S(5) && m_mouseY < dpiTrack.y + dpiTrack.h + S(5));
+    if (dpiHover && m_mousePressed) {
+        m_editingItem = 3; // editing DPI slider
+    }
+    if (m_editingItem == 3 && m_mousePressed) {
+        int rel = m_mouseX - dpiTrack.x;
+        if (rel < 0) rel = 0;
+        if (rel > S(200)) rel = S(200);
+        m_settings.manualDPI = 80 + rel * dpiRange / S(200);
+        m_settings.autoDetectDPI = false;
+        DetectDPI();
+        LoadFont();
         SaveSettings();
     }
     y += lineH;
