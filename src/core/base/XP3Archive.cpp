@@ -79,7 +79,7 @@ bool XP3Archive::Open(const std::string& filepath) {
                 } else if (memcmp(sub_type, "name", 4) == 0) {
                     // name block: UTF-16LE string with length prefix
                     if (pos + 4 > header_data.size()) break;
-                    tjs_uint32 name_len;
+                    uint32_t name_len;
                     memcpy(&name_len, &header_data[pos], 4);
                     pos += 4;
                     
