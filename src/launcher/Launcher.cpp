@@ -78,22 +78,22 @@ std::string Launcher::GetGPUInfo() const {
         if (fgets(buf, sizeof(buf), fp)) {
             const char* p = strchr(buf, ':');
             if (p) {
-                m_gpuInfo = std::string(p + 2);
-                m_gpuInfo.erase(m_gpuInfo.find_last_not_of(" \n\r\t") + 1);
+                std::string s(p + 2);
+                s.erase(s.find_last_not_of(" \n\r\t") + 1);
+                const_cast<std::string&>(m_gpuInfo) = s;
             }
         }
         pclose(fp);
     }
     
-    if (m_gpuInfo.empty()) m_gpuInfo = "Unknown";
+    if (m_gpuInfo.empty()) const_cast<std::string&>(m_gpuInfo) = "Unknown";
     
-    // Detect hardware acceleration
-    m_hwAccel = (m_gpuInfo.find("llvmpipe") == std::string::npos &&
+    const_cast<bool&>(m_hwAccel) = (m_gpuInfo.find("llvmpipe") == std::string::npos &&
                  m_gpuInfo.find("softpipe") == std::string::npos &&
                  m_gpuInfo.find("swrast") == std::string::npos &&
                  m_gpuInfo.find("Unknown") == std::string::npos);
     
-    m_gpuInfoCached = true;
+    const_cast<bool&>(m_gpuInfoCached) = true;
     return m_gpuInfo;
 }
 
