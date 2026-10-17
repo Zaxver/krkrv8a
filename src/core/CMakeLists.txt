@@ -6,6 +6,7 @@ set(KRKR_CORE_SOURCES
     base/CharacterSet.cpp
     base/BinaryStream.cpp
     base/XP3Archive.cpp
+    base/PFSArchive.cpp
     base/StorageImpl.cpp
     base/EventImpl.cpp
     visual/LayerImpl.cpp

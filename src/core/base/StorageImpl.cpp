@@ -1,5 +1,6 @@
 #include "StorageImpl.h"
 #include "CharacterSet.h"
+#include "PFSArchive.h"
 #include <fstream>
 #include <filesystem>
 #include <algorithm>
@@ -25,15 +26,17 @@ bool StorageImpl::Initialize(const std::string& gamePath) {
     TVP_LOG_INFO("StorageImpl: Game path = %s", gamePath.c_str());
     TVP_LOG_INFO("StorageImpl: Save path = %s", m_savePath.c_str());
     
-    // Auto-detect and load XP3 archives in the game directory
+    // Auto-detect and load XP3 and PFS archives in the game directory
     if (!gamePath.empty() && fs::is_directory(gamePath)) {
         for (const auto& entry : fs::directory_iterator(gamePath)) {
             if (entry.is_regular_file()) {
                 auto ext = entry.path().extension().string();
-                // Convert extension to lowercase
                 std::transform(ext.begin(), ext.end(), ext.begin(), ::tolower);
                 if (ext == ".xp3") {
                     TVP_LOG_INFO("StorageImpl: Found XP3 archive: %s", entry.path().string().c_str());
+                    AddArchive(entry.path().string());
+                } else if (ext == ".pfs") {
+                    TVP_LOG_INFO("StorageImpl: Found PFS archive: %s", entry.path().string().c_str());
                     AddArchive(entry.path().string());
                 }
             }
@@ -45,6 +48,7 @@ bool StorageImpl::Initialize(const std::string& gamePath) {
 
 void StorageImpl::Shutdown() {
     m_archives.clear();
+    m_pfsArchives.clear();
     m_gamePath.clear();
 }
 
@@ -59,22 +63,25 @@ std::string StorageImpl::WideToNative(const std::wstring& wpath) const {
 bool StorageImpl::FileExists(const std::wstring& name) const {
     auto n = NormalizeStoragePath(name);
     
-    // Check archives first (latest added takes priority)
+    // Check XP3 archives
     for (auto it = m_archives.rbegin(); it != m_archives.rend(); ++it) {
         if ((*it)->HasFile(n)) return true;
+    }
+    
+    // Check PFS archives
+    std::string narrowName = WideToNative(n);
+    for (auto it = m_pfsArchives.rbegin(); it != m_pfsArchives.rend(); ++it) {
+        if ((*it)->HasFile(narrowName)) return true;
     }
     
     // Check on disk
     std::string native = WideToNative(n);
     std::string fullpath;
     
-    // Try relative to game path
     if (!m_gamePath.empty()) {
         fullpath = m_gamePath + "/" + native;
         if (fs::exists(fullpath)) return true;
     }
-    
-    // Try absolute
     if (fs::exists(native)) return true;
     
     return false;
@@ -84,10 +91,19 @@ std::vector<uint8_t> StorageImpl::ReadFile(const std::wstring& name) const {
     auto n = NormalizeStoragePath(name);
     std::vector<uint8_t> result;
     
-    // Check archives first (latest added takes priority)
+    // Check XP3 archives first
     for (auto it = m_archives.rbegin(); it != m_archives.rend(); ++it) {
         if ((*it)->HasFile(n)) {
             result = (*it)->ExtractFile(n);
+            if (!result.empty()) return result;
+        }
+    }
+    
+    // Check PFS archives
+    std::string narrowName = WideToNative(n);
+    for (auto it = m_pfsArchives.rbegin(); it != m_pfsArchives.rend(); ++it) {
+        if ((*it)->HasFile(narrowName)) {
+            result = (*it)->ExtractFile(narrowName);
             if (!result.empty()) return result;
         }
     }
@@ -177,6 +193,14 @@ std::vector<std::wstring> StorageImpl::ListFiles(const std::wstring& dirPath) co
         }
     }
     
+    // List from PFS archives
+    for (const auto& archive : m_pfsArchives) {
+        auto fileList = archive->GetFileList();
+        for (const auto& f : fileList) {
+            result.push_back(CharacterSet::UTF8ToWide(f));
+        }
+    }
+    
     // List from disk
     std::string fullpath;
     if (!m_gamePath.empty()) {
@@ -195,10 +219,25 @@ std::vector<std::wstring> StorageImpl::ListFiles(const std::wstring& dirPath) co
 }
 
 bool StorageImpl::AddArchive(const std::string& archivePath) {
-    auto archive = std::make_unique<XP3Archive>();
-    if (archive->Open(archivePath)) {
-        m_archives.push_back(std::move(archive));
-        return true;
+    auto ext = fs::path(archivePath).extension().string();
+    std::transform(ext.begin(), ext.end(), ext.begin(), ::tolower);
+    
+    if (ext == ".pfs") {
+        auto archive = std::make_unique<PFSArchive>();
+        if (archive->Open(archivePath)) {
+            // Store as a different type - for now, convert PFS file lookups
+            // We need to handle PFS in ReadFile/HasFile too
+            // Simplest: extract PFS entries into the same lookup mechanism
+            // For now, store the PFS archive pointer
+            m_pfsArchives.push_back(std::move(archive));
+            return true;
+        }
+    } else {
+        auto archive = std::make_unique<XP3Archive>();
+        if (archive->Open(archivePath)) {
+            m_archives.push_back(std::move(archive));
+            return true;
+        }
     }
     return false;
 }

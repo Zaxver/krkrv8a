@@ -108,54 +108,26 @@ bool Launcher::IsHardwareAccelerated() const {
 }
 
 // ====================================================================
-// File Browser
+// zenity file dialog helper
 // ====================================================================
 
-void Launcher::OpenFileBrowser(const std::string& startDir, std::function<void(const std::string&)> onSelected) {
-    m_fileBrowser.open = true;
-    m_fileBrowser.currentDir = startDir;
-    m_fileBrowser.onSelected = onSelected;
-    m_fileBrowser.scrollOffset = 0;
-    RefreshFileBrowser();
-}
-
-void Launcher::RefreshFileBrowser() {
-    m_fileBrowser.entries.clear();
+static std::string OpenZenityDialog(bool selectDirectory) {
+    std::string cmd = "zenity --file-selection";
+    if (selectDirectory) cmd += " --directory";
+    cmd += " 2>/dev/null";
     
-    std::string dir = m_fileBrowser.currentDir;
-    if (dir.empty()) dir = "/";
+    FILE* fp = popen(cmd.c_str(), "r");
+    if (!fp) return "";
     
-    // Add parent dir
-    fs::path p(dir);
-    if (p.has_parent_path()) {
-        m_fileBrowser.entries.push_back(".. (" + p.parent_path().string() + ")");
+    char buf[4096];
+    std::string result;
+    if (fgets(buf, sizeof(buf), fp)) {
+        result = buf;
+        // strip trailing newline
+        if (!result.empty() && result.back() == '\n') result.pop_back();
     }
-    
-    // List directory
-    try {
-        std::vector<std::string> dirs, files;
-        for (const auto& entry : fs::directory_iterator(dir)) {
-            std::string name = entry.path().filename().string();
-            if (name.empty() || name[0] == '.') continue; // skip hidden
-            
-            if (entry.is_directory()) {
-                dirs.push_back("[" + name + "]");
-            } else {
-                auto ext = entry.path().extension().string();
-                std::transform(ext.begin(), ext.end(), ext.begin(), ::tolower);
-                if (ext == ".xp3" || ext == ".zip") {
-                    files.push_back(name);
-                }
-            }
-        }
-        std::sort(dirs.begin(), dirs.end());
-        std::sort(files.begin(), files.end());
-        
-        for (auto& d : dirs) m_fileBrowser.entries.push_back(d);
-        for (auto& f : files) m_fileBrowser.entries.push_back(f);
-    } catch (...) {
-        m_fileBrowser.entries.push_back("(cannot read directory)");
-    }
+    pclose(fp);
+    return result;
 }
 
 // ====================================================================
@@ -175,13 +147,14 @@ Launcher::~Launcher() { Shutdown(); }
 
 void Launcher::LoadFont() {
     const char* fontPaths[] = {
-        "/data/data/com.termux/files/usr/share/fonts/TTF/DejaVuSans.ttf",
-        "/data/data/com.termux/files/usr/share/fonts/truetype/dejavu/DejaVuSans.ttf",
+        // CJK fonts first (for Chinese/Japanese game names)
         "/system/fonts/NotoSansCJK-Regular.ttc",
         "/system/fonts/MiSansVF.ttf",
         "/system/fonts/DroidSans.ttf",
-        "/system/fonts/Roboto-Regular.ttf",
-        "/usr/share/fonts/truetype/dejavu/DejaVuSans.ttf",
+        // Termux paths
+        "/data/data/com.termux/files/usr/share/fonts/TTF/DejaVuSans.ttf",
+        "/data/data/com.termux/files/usr/share/fonts/truetype/dejavu/DejaVuSans.ttf",
+        // Standard Linux paths
         "/usr/share/fonts/truetype/noto/NotoSansCJK-Regular.ttc",
         "/usr/share/fonts/noto-cjk/NotoSansCJK-Regular.ttc",
         "/usr/share/fonts/opentype/noto/NotoSansCJK-Regular.ttc",
@@ -378,6 +351,11 @@ bool Launcher::DetectGame(const std::string& path, std::string& name, bool& isXP
         std::transform(ext.begin(), ext.end(), ext.begin(), ::tolower);
         if (ext == ".xp3") {
             isXP3 = true;
+            name = p.stem().string();
+            return true;
+        }
+        if (ext == ".pfs") {
+            isXP3 = false;
             name = p.stem().string();
             return true;
         }
@@ -662,19 +640,14 @@ void Launcher::RenderAddGameDialog() {
                inputRect.x + S(8), inputRect.y + S(10),
                m_inputPath.empty() ? col_textDim : col_text, 14);
     
-    // Browse button - NOW WORKS
+    // Browse button - uses zenity
     SDL_Rect browseBtn = {dlgX + dlgW - S(130), dlgY + S(105), S(110), S(30)};
     if (Button("Browse...", browseBtn, col_button, col_buttonHover)) {
-        std::string startDir = m_inputPath.empty() ? m_lastBrowsePath : m_inputPath;
-        if (startDir.empty()) startDir = "/";
-        // If it's a file, start from its parent
-        if (fs::exists(startDir) && fs::is_regular_file(startDir)) {
-            startDir = fs::path(startDir).parent_path().string();
-        }
-        OpenFileBrowser(startDir, [this](const std::string& selected) {
+        std::string selected = OpenZenityDialog(true); // directory mode
+        if (!selected.empty()) {
             m_inputPath = selected;
             m_inputActive = true;
-        });
+        }
     }
     
     // OK / Cancel
@@ -689,120 +662,6 @@ void Launcher::RenderAddGameDialog() {
     if (Button("Cancel", cancelBtn, col_card, col_cardHover)) {
         m_showAddDialog = false;
         m_inputActive = false;
-    }
-}
-
-// ====================================================================
-// File browser dialog
-// ====================================================================
-
-void Launcher::RenderFileBrowser() {
-    // Full screen overlay
-    SDL_Rect overlay = {0, 0, m_windowWidth, m_windowHeight};
-    SDL_SetRenderDrawBlendMode(m_renderer, SDL_BLENDMODE_BLEND);
-    SDL_SetRenderDrawColor(m_renderer, 0, 0, 0, 200);
-    SDL_RenderFillRect(m_renderer, &overlay);
-    
-    int bw = S(600), bh = S(480);
-    int bx = (m_windowWidth - bw) / 2;
-    int by = (m_windowHeight - bh) / 2;
-    
-    SDL_Rect dlg = {bx, by, bw, bh};
-    DrawRoundedRect(dlg, {50, 50, 65, 255}, 12);
-    
-    // Title bar
-    RenderText("Browse - " + m_fileBrowser.currentDir, bx + S(20), by + S(15), col_text, 18);
-    
-    // Up button
-    SDL_Rect upBtn = {bx + bw - S(160), by + S(12), S(60), S(28)};
-    if (Button("Up", upBtn, col_button, col_buttonHover)) {
-        fs::path p(m_fileBrowser.currentDir);
-        if (p.has_parent_path()) {
-            m_fileBrowser.currentDir = p.parent_path().string();
-            RefreshFileBrowser();
-            m_fileBrowser.scrollOffset = 0;
-        }
-    }
-    
-    // Home button
-    SDL_Rect homeBtn = {bx + bw - S(90), by + S(12), S(70), S(28)};
-    if (Button("Home", homeBtn, col_button, col_buttonHover)) {
-        const char* home = getenv("HOME");
-        m_fileBrowser.currentDir = home ? home : "/";
-        RefreshFileBrowser();
-        m_fileBrowser.scrollOffset = 0;
-    }
-    
-    // List area
-    int listY = by + S(55);
-    int listH = bh - S(55) - S(50);
-    int itemH = S(28);
-    int maxVisible = listH / itemH;
-    
-    // Clip area
-    SDL_Rect clipRect = {bx + S(10), listY, bw - S(20), listH};
-    SDL_RenderSetClipRect(m_renderer, &clipRect);
-    
-    for (int i = 0; i < (int)m_fileBrowser.entries.size(); i++) {
-        int y = listY + i * itemH - m_fileBrowser.scrollOffset;
-        if (y + itemH < listY || y > listY + listH) continue;
-        
-        bool isDir = (!m_fileBrowser.entries[i].empty() && m_fileBrowser.entries[i][0] == '[');
-        bool isParent = (!m_fileBrowser.entries[i].empty() && m_fileBrowser.entries[i][0] == '.');
-        
-        bool hovered = (m_mouseX >= bx + S(10) && m_mouseX < bx + bw - S(10) &&
-                        m_mouseY >= y && m_mouseY < y + itemH);
-        
-        SDL_Rect itemRect = {bx + S(10), y, bw - S(20), itemH};
-        DrawRect(itemRect, hovered ? col_cardHover : (SDL_Color){45, 45, 60, 255});
-        
-        SDL_Color textCol = isDir ? col_accent : col_text;
-        if (isParent) textCol = col_textDim;
-        RenderText(m_fileBrowser.entries[i], bx + S(20), y + S(5), textCol, 14);
-        
-        if (hovered && m_mouseReleased) {
-            if (isParent) {
-                fs::path p(m_fileBrowser.currentDir);
-                if (p.has_parent_path()) {
-                    m_fileBrowser.currentDir = p.parent_path().string();
-                    RefreshFileBrowser();
-                    m_fileBrowser.scrollOffset = 0;
-                }
-            } else if (isDir) {
-                // Extract dir name from [name]
-                std::string dirName = m_fileBrowser.entries[i].substr(1, m_fileBrowser.entries[i].size() - 2);
-                m_fileBrowser.currentDir += "/" + dirName;
-                RefreshFileBrowser();
-                m_fileBrowser.scrollOffset = 0;
-            } else {
-                // File selected
-                std::string selected = m_fileBrowser.currentDir + "/" + m_fileBrowser.entries[i];
-                m_fileBrowser.open = false;
-                if (m_fileBrowser.onSelected) {
-                    m_fileBrowser.onSelected(selected);
-                }
-                SDL_RenderSetClipRect(m_renderer, nullptr);
-                return;
-            }
-        }
-    }
-    
-    SDL_RenderSetClipRect(m_renderer, nullptr);
-    
-    // Cancel button
-    SDL_Rect cancelBtn = {bx + bw - S(100), by + bh - S(38), S(80), S(30)};
-    if (Button("Cancel", cancelBtn, col_card, col_cardHover)) {
-        m_fileBrowser.open = false;
-    }
-    
-    // Select current dir button
-    SDL_Rect selectDirBtn = {bx + S(20), by + bh - S(38), S(140), S(30)};
-    if (Button("Select This Folder", selectDirBtn, col_button, col_buttonHover)) {
-        std::string selected = m_fileBrowser.currentDir;
-        m_fileBrowser.open = false;
-        if (m_fileBrowser.onSelected) {
-            m_fileBrowser.onSelected(selected);
-        }
     }
 }
 
@@ -900,21 +759,26 @@ void Launcher::RenderSettings() {
             SaveSettings();
         }
     }
-    // Slider interaction
+    // Slider interaction: drag to preview, apply on release
     bool dpiHover = (m_mouseX >= dpiTrack.x - S(5) && m_mouseX < dpiTrack.x + dpiTrack.w + S(5) &&
                     m_mouseY >= dpiTrack.y - S(5) && m_mouseY < dpiTrack.y + dpiTrack.h + S(5));
     if (dpiHover && m_mousePressed) {
         m_editingItem = 3; // editing DPI slider
     }
-    if (m_editingItem == 3 && m_mousePressed) {
+    if (m_editingItem == 3) {
+        // Update temp value while dragging
         int rel = m_mouseX - dpiTrack.x;
         if (rel < 0) rel = 0;
         if (rel > S(200)) rel = S(200);
         m_settings.manualDPI = 80 + rel * dpiRange / S(200);
         m_settings.autoDetectDPI = false;
-        DetectDPI();
-        LoadFont();
-        SaveSettings();
+        // Apply only on release
+        if (!m_mousePressed) {
+            DetectDPI();
+            LoadFont();
+            SaveSettings();
+            m_editingItem = -1;
+        }
     }
     y += lineH;
     y += S(10);
@@ -961,12 +825,15 @@ void Launcher::RenderSettings() {
     if (volHover && m_mousePressed) {
         m_editingItem = 2; // editing volume slider
     }
-    if (m_editingItem == 2 && m_mousePressed) {
+    if (m_editingItem == 2) {
         int rel = m_mouseX - volTrack.x;
         if (rel < 0) rel = 0;
         if (rel > S(200)) rel = S(200);
         m_settings.audioVolume = rel * 128 / S(200);
-        SaveSettings();
+        if (!m_mousePressed) {
+            SaveSettings();
+            m_editingItem = -1;
+        }
     }
     y += lineH;
     y += S(10);
@@ -1048,7 +915,6 @@ void Launcher::Render() {
     }
     
     if (m_showAddDialog) RenderAddGameDialog();
-    if (m_fileBrowser.open) RenderFileBrowser();
 }
 
 void Launcher::HandleEvent(const SDL_Event& event) {
@@ -1079,10 +945,7 @@ void Launcher::HandleEvent(const SDL_Event& event) {
             }
             break;
         case SDL_MOUSEWHEEL:
-            if (m_fileBrowser.open) {
-                m_fileBrowser.scrollOffset -= event.wheel.y * S(30);
-                if (m_fileBrowser.scrollOffset < 0) m_fileBrowser.scrollOffset = 0;
-            } else if (m_mode == LauncherMode::Settings) {
+            if (m_mode == LauncherMode::Settings) {
                 m_settingsScroll -= event.wheel.y * S(30);
                 if (m_settingsScroll < 0) m_settingsScroll = 0;
             } else {
@@ -1091,17 +954,7 @@ void Launcher::HandleEvent(const SDL_Event& event) {
             }
             break;
         case SDL_KEYDOWN:
-            if (m_fileBrowser.open) {
-                if (event.key.keysym.sym == SDLK_ESCAPE) {
-                    m_fileBrowser.open = false;
-                } else if (event.key.keysym.sym == SDLK_BACKSPACE) {
-                    fs::path p(m_fileBrowser.currentDir);
-                    if (p.has_parent_path()) {
-                        m_fileBrowser.currentDir = p.parent_path().string();
-                        RefreshFileBrowser();
-                    }
-                }
-            } else if (m_showAddDialog && m_inputActive) {
+            if (m_showAddDialog && m_inputActive) {
                 if (event.key.keysym.sym == SDLK_BACKSPACE && !m_inputPath.empty()) {
                     m_inputPath.pop_back();
                 } else if (event.key.keysym.sym == SDLK_RETURN) {
@@ -1122,7 +975,7 @@ void Launcher::HandleEvent(const SDL_Event& event) {
             }
             break;
         case SDL_TEXTINPUT:
-            if (m_showAddDialog && m_inputActive && !m_fileBrowser.open) {
+            if (m_showAddDialog && m_inputActive) {
                 m_inputPath += event.text.text;
             }
             break;

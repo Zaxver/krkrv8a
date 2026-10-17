@@ -26,14 +26,7 @@ enum class LauncherMode {
     About
 };
 
-// File browser state
-struct FileBrowser {
-    bool open = false;
-    std::string currentDir;
-    std::vector<std::string> entries;
-    int scrollOffset = 0;
-    std::function<void(const std::string&)> onSelected;
-};
+    // File browser - removed, using zenity now
 
 // Settings state
 struct Settings {
@@ -79,7 +72,6 @@ private:
     void RenderTopBar();
     void RenderGameGrid();
     void RenderAddGameDialog();
-    void RenderFileBrowser();
     
     void LoadFont();
     void DetectDPI();
@@ -97,9 +89,8 @@ private:
     bool FindStartupFile(const std::string& gamePath, std::string& startupFile);
     SDL_Texture* LoadGameIcon(const std::string& gamePath);
     
-    // File browser
-    void OpenFileBrowser(const std::string& startDir, std::function<void(const std::string&)> onSelected);
-    void RefreshFileBrowser();
+    // File browser - using zenity now
+    // void OpenFileBrowser(...);
     
     // Hardware detection
     std::string GetGPUInfo() const;
@@ -157,7 +148,7 @@ private:
     int m_lastClickIndex = -1;
     uint32_t m_lastClickTime = 0;
     
-    FileBrowser m_fileBrowser;
+    // No more FileBrowser member - using zenity
     
     // Cached GPU info
     std::string m_gpuInfo;

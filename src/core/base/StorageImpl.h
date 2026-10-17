@@ -4,6 +4,7 @@
 
 #include "tvp_types.h"
 #include "XP3Archive.h"
+#include "PFSArchive.h"
 #include <string>
 #include <vector>
 #include <map>
@@ -46,6 +47,7 @@ private:
     std::string m_gamePath;
     std::string m_savePath;
     std::vector<std::unique_ptr<XP3Archive>> m_archives;
+    std::vector<std::unique_ptr<PFSArchive>> m_pfsArchives;
     
     std::string WideToNative(const std::wstring& wpath) const;
     std::wstring NormalizeStoragePath(const std::wstring& path) const;
