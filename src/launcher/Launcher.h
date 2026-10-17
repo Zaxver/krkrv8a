@@ -10,26 +10,43 @@
 #include <memory>
 #include <functional>
 
-// Game entry in the launcher
 struct GameEntry {
-    std::string name;           // Display name
-    std::string path;           // Path to game folder or XP3 file
-    std::string iconPath;       // Optional icon
-    std::string lastPlayed;     // Last played timestamp
-    bool isXP3 = false;         // Is it an XP3 file (vs folder)
+    std::string name;
+    std::string path;
+    std::string iconPath;
+    std::string lastPlayed;
+    bool isXP3 = false;
     SDL_Texture* iconTexture = nullptr;
     int iconW = 0, iconH = 0;
 };
 
-// Launcher mode
 enum class LauncherMode {
-    Library,       // Main game library view
-    Settings,      // Settings page
-    About          // About page
+    Library,
+    Settings,
+    About
 };
 
-// The GUI Launcher
-// Renders an SDL2-based GUI (no Dear ImGui dependency, pure SDL2)
+// File browser state
+struct FileBrowser {
+    bool open = false;
+    std::string currentDir;
+    std::vector<std::string> entries;
+    int scrollOffset = 0;
+    std::function<void(const std::string&)> onSelected;
+};
+
+// Settings state
+struct Settings {
+    int windowWidth = 960;
+    int windowHeight = 640;
+    bool fullscreen = false;
+    bool vsync = true;
+    int audioVolume = 64;
+    std::string fontPath;
+    int uiScale = 100; // percentage, 100 = 1x
+    bool autoDetectDPI = true;
+};
+
 class Launcher {
 public:
     Launcher();
@@ -38,22 +55,17 @@ public:
     bool Initialize(SDL_Window* window, SDL_Renderer* renderer);
     void Shutdown();
     
-    // Main loop
     void Run();
-    
-    // Stop the launcher
     void Stop() { m_running = false; }
     
-    // Game library management
     void AddGame(const std::string& path);
     void RemoveGame(int index);
     void LoadLibrary();
     void SaveLibrary();
+    void LoadSettings();
+    void SaveSettings();
     
-    // Get the selected game path for launching
     std::string GetSelectedGamePath() const { return m_selectedGamePath; }
-    
-    // Check if a game was selected to launch
     bool WasGameSelected() const { return m_launchGame; }
     void ClearSelection() { m_launchGame = false; }
     
@@ -66,20 +78,33 @@ private:
     void RenderTopBar();
     void RenderGameGrid();
     void RenderAddGameDialog();
+    void RenderFileBrowser();
     
     void LoadFont();
+    void DetectDPI();
+    int S(int val) const; // scale by DPI
+    TTF_Font* GetFont(int size) const; // get font at scaled size
+    
     void RenderText(const std::string& text, int x, int y, SDL_Color color, int size = 16);
     void RenderTextWrapped(const std::string& text, int x, int y, int w, SDL_Color color, int size = 16);
     
-    // UI helpers
     bool Button(const std::string& text, SDL_Rect rect, SDL_Color bg, SDL_Color hover);
     void DrawRect(SDL_Rect rect, SDL_Color color);
     void DrawRoundedRect(SDL_Rect rect, SDL_Color color, int radius);
     
-    // Game detection
     bool DetectGame(const std::string& path, std::string& name, bool& isXP3);
     bool FindStartupFile(const std::string& gamePath, std::string& startupFile);
     SDL_Texture* LoadGameIcon(const std::string& gamePath);
+    
+    // File browser
+    void OpenFileBrowser(const std::string& startDir, std::function<void(const std::string&)> onSelected);
+    void RefreshFileBrowser();
+    
+    // Hardware detection
+    std::string GetGPUInfo() const;
+    std::string GetRendererType() const;
+    bool IsHardwareAccelerated() const;
+    std::string GetSDLRendererInfo() const;
     
     SDL_Window* m_window = nullptr;
     SDL_Renderer* m_renderer = nullptr;
@@ -94,6 +119,10 @@ private:
     int m_windowHeight = 640;
     int m_selectedIndex = -1;
     int m_hoveredIndex = -1;
+    
+    // DPI scaling
+    float m_dpiScale = 1.0f;
+    int m_androidDPI = 0;
     
     bool m_running = false;
     bool m_launchGame = false;
@@ -110,33 +139,36 @@ private:
     SDL_Color col_button   = {60, 120, 180, 255};
     SDL_Color col_buttonHover = {80, 150, 220, 255};
     SDL_Color col_input    = {40, 40, 55, 255};
+    SDL_Color col_inputFocus= {55, 55, 75, 255};
     
-    // Input dialog state
     std::string m_inputPath;
     bool m_inputActive = false;
     
-    // Config
     std::string m_configPath;
     std::string m_lastBrowsePath;
+    Settings m_settings;
     
-    // Scroll offset for game grid
     int m_scrollOffset = 0;
     
-    // Mouse state
     int m_mouseX = 0, m_mouseY = 0;
     bool m_mousePressed = false;
     bool m_mouseReleased = false;
     int m_lastClickIndex = -1;
     uint32_t m_lastClickTime = 0;
     
-    // UI button tracking
-    struct UIButton {
-        SDL_Rect rect;
-        std::string id;
-        bool hovered = false;
-        bool pressed = false;
-    };
-    std::vector<UIButton> m_buttons;
+    FileBrowser m_fileBrowser;
+    
+    // Cached GPU info
+    std::string m_gpuInfo;
+    std::string m_rendererInfo;
+    bool m_hwAccel = false;
+    bool m_gpuInfoCached = false;
+    
+    // Settings page scroll
+    int m_settingsScroll = 0;
+    
+    // Settings editing state
+    int m_editingItem = -1; // index of setting being edited (slider drag)
 };
 
 #endif // KRKR_LAUNCHER_H
